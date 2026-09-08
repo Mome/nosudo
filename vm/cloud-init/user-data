@@ -1,0 +1,34 @@
+#cloud-config
+# Provision a throwaway `tester` user with passwordless sudo (so the e2e can
+# drive unsudo non-interactively), share the host repo over 9p, and install
+# unsudo as an editable user tool. __SSH_PUBKEY__ is substituted by vm/lib.sh.
+
+users:
+  - name: tester
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    shell: /bin/bash
+    lock_passwd: false
+    ssh_authorized_keys:
+      - __SSH_PUBKEY__
+
+# Password fallback (throwaway VM) so the console/ssh is reachable for debugging
+# even if key injection has issues.
+ssh_pwauth: true
+chpasswd:
+  expire: false
+  users:
+    - { name: tester, password: tester, type: text }
+
+runcmd:
+  # First-boot ssh.service can fail before host keys exist; generate them and
+  # (re)start ssh so the harness can connect.
+  - [ sh, -c, "ssh-keygen -A; systemctl restart ssh.service 2>/dev/null || systemctl restart sshd.service 2>/dev/null || true" ]
+  # Let the harness drive as root (the test driver must stay privileged even
+  # while `tester` is restricted).
+  - [ sh, -c, "install -d -m700 /root/.ssh && cp /home/tester/.ssh/authorized_keys /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys" ]
+  # Install uv for tester; unsudo itself is copied in + installed over ssh by
+  # vm/up.sh (the cloud kernel has no 9p to share the repo).
+  - [ sh, -c, "su - tester -c 'command -v curl >/dev/null && curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -q || wget -qO- https://astral.sh/uv/install.sh | sh -s -- -q'" ]
+
+final_message: "unsudo-test base provisioned in $UPTIME seconds"
