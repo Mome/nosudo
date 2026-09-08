@@ -12,7 +12,9 @@ unsudo = "unsudo.cli:main"
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.1",
     "pytest>=8",
+    "ruff>=0.16.6",
 ]
 
 [build-system]
@@ -24,3 +26,18 @@ packages = ["src/unsudo"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["SIM108"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true

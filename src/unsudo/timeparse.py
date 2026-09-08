@@ -86,6 +86,7 @@ def resolve_lift_time(
     if for_ is not None:
         lift = current + parse_duration(for_)
     else:
+        assert until is not None  # guaranteed by the exactly-one check above
         lift = parse_until(until, now=current)
     if lift <= current:
         raise TimeParseError("lift time is in the past")

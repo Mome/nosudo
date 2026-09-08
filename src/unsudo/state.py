@@ -7,7 +7,6 @@ their own lift time without the sudo they just gave up (specs.md §5).
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict, dataclass
 from datetime import datetime
 

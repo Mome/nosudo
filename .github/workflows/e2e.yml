@@ -1,0 +1,26 @@
+name: VM e2e
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly, Monday 06:00 UTC
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU/KVM + seed-ISO builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils xorriso
+      - name: Check KVM is available
+        run: |
+          ls -l /dev/kvm
+          sudo chmod 666 /dev/kvm
+      - run: vm/up.sh
+      - run: vm/e2e.sh
+      - if: always()
+        run: cat vm/.work/serial.log || true
+      - if: always()
+        run: vm/down.sh

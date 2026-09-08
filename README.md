@@ -40,5 +40,11 @@ This project uses [`uv`](https://docs.astral.sh/uv/):
 ```sh
 uv sync
 uv run pytest
+uv run ruff check .
+uv run mypy
 uv run unsudo --help
 ```
+
+CI (`.github/workflows/ci.yml`) runs the above on every push/PR. The VM e2e suite
+(`.github/workflows/e2e.yml`) needs KVM and a base-image download, so it runs weekly and
+on-demand rather than per-PR — see [vm/README.md](vm/README.md).

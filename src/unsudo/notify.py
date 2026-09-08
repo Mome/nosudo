@@ -6,6 +6,7 @@ restrict/restore action (specs.md §5). All errors are swallowed.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -13,26 +14,32 @@ from datetime import datetime
 
 from .runner import Runner
 
-_SILENT = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-
 
 def _broadcast(message: str) -> None:
     # ``wall`` reaches the user's terminals; ``notify-send`` is attempted for a
     # desktop session if available. Both are best-effort and fully silenced:
     # failures must never leak output (specs.md §5).
     if shutil.which("wall"):
-        try:
-            subprocess.run(["wall"], input=message, text=True, check=False, **_SILENT)
-        except (OSError, subprocess.SubprocessError):
-            pass
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(
+                ["wall"],
+                input=message,
+                text=True,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
     # Only try notify-send when a session bus actually exists. Otherwise glib
     # tries `dbus-launch --autolaunch`, which fails noisily — and as root (after
     # self-elevation) there is no session bus anyway.
     if shutil.which("notify-send") and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
-        try:
-            subprocess.run(["notify-send", "unsudo", message], check=False, **_SILENT)
-        except (OSError, subprocess.SubprocessError):
-            pass
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(
+                ["notify-send", "unsudo", message],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
 
 def start(user: str, lift_at: datetime, runner: Runner) -> None:
