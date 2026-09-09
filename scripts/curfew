@@ -2,6 +2,13 @@
 # curfew — apply an hblock website-blocking profile, then lock yourself out of
 # sudo via nosudo so the block can't be undone before it lifts.
 #
+# hblock REPLACES /etc/hosts wholesale (it does not merge with whatever is
+# already there), so curfew backs it up first and restores it automatically
+# when the curfew ends via its own reboot-safe systemd timer — the same
+# pattern nosudo itself uses to restore sudo (see scheduler.py). Only one
+# curfew hosts-block can be active at a time, since /etc/hosts is a single
+# system-wide file.
+#
 # Profiles live in $CURFEW_PROFILES_DIR (default: ~/.config/curfew/profiles/<name>/)
 # and are plain hblock input files:
 #   sources.list  — blocklist URLs, one per line (hblock -S)
@@ -14,6 +21,14 @@
 set -euo pipefail
 
 PROFILES_DIR="${CURFEW_PROFILES_DIR:-$HOME/.config/curfew/profiles}"
+
+# Where the pre-curfew /etc/hosts and the restore timer's own files live.
+STATE_DIR="/var/lib/curfew"
+HOSTS_BACKUP="$STATE_DIR/hosts.bak"
+RESTORE_SCRIPT="$STATE_DIR/restore-hosts.sh"
+SYSTEMD_DIR="/etc/systemd/system"
+RESTORE_SERVICE="curfew-restore-hosts.service"
+RESTORE_TIMER="curfew-restore-hosts.timer"
 
 usage() {
   cat <<'EOF'
@@ -78,16 +93,111 @@ cmd_apply() {
     exit 1
   fi
 
+  if sudo test -f "$HOSTS_BACKUP"; then
+    echo "curfew: a curfew hosts-block is already active ($HOSTS_BACKUP exists);" >&2
+    echo "curfew: refusing to apply another profile on top of it — wait for it" >&2
+    echo "curfew: to lift, or restore manually with: sudo cp $HOSTS_BACKUP /etc/hosts" >&2
+    exit 1
+  fi
+
+  local target_user
+  target_user="$(resolve_target_user "$@")"
+
   local hblock_args=()
   [[ -f "$dir/sources.list" ]] && hblock_args+=(-S "$dir/sources.list")
   [[ -f "$dir/deny.list" ]] && hblock_args+=(-D "$dir/deny.list")
   [[ -f "$dir/allow.list" ]] && hblock_args+=(-A "$dir/allow.list")
 
+  echo "curfew: backing up /etc/hosts to $HOSTS_BACKUP..."
+  sudo mkdir -p "$STATE_DIR"
+  sudo cp -p /etc/hosts "$HOSTS_BACKUP"
+
   echo "curfew: applying profile '$profile' via hblock..."
-  sudo hblock "${hblock_args[@]}"
+  if ! sudo hblock "${hblock_args[@]}"; then
+    echo "curfew: hblock failed; removing hosts backup" >&2
+    sudo rm -f "$HOSTS_BACKUP"
+    exit 1
+  fi
 
   echo "curfew: locking sudo via nosudo..."
-  nosudo restrict "$@"
+  if ! nosudo restrict "$@"; then
+    echo "curfew: nosudo restrict failed; reverting /etc/hosts" >&2
+    sudo cp -f "$HOSTS_BACKUP" /etc/hosts
+    sudo rm -f "$HOSTS_BACKUP"
+    exit 1
+  fi
+
+  echo "curfew: scheduling automatic /etc/hosts restore..."
+  install_hosts_restore_timer "$target_user"
+}
+
+# Best-effort match for nosudo's own user resolution (arg, else SUDO_USER,
+# else invoking user) so the restore timer is keyed off the same lift time
+# `nosudo restrict "$@"` just computed.
+resolve_target_user() {
+  local first="${1:-}"
+  if [[ -n "$first" && "$first" != --* ]]; then
+    printf '%s\n' "$first"
+  else
+    printf '%s\n' "${SUDO_USER:-$(id -un)}"
+  fi
+}
+
+# Installs a reboot-safe systemd timer that restores $HOSTS_BACKUP over
+# /etc/hosts at the user's nosudo lift time, then cleans up after itself —
+# the same pattern nosudo uses to restore sudo (see scheduler.py).
+install_hosts_restore_timer() {
+  local user="$1"
+  local status_line lift_at
+
+  status_line="$(nosudo status | grep "^${user}: " || true)"
+  if [[ -z "$status_line" ]]; then
+    echo "curfew: could not read nosudo's lift time for '$user';" >&2
+    echo "curfew: /etc/hosts restore was NOT scheduled — restore it yourself" >&2
+    echo "curfew: when the curfew ends with: sudo cp $HOSTS_BACKUP /etc/hosts" >&2
+    return 1
+  fi
+  lift_at="$(sed -E 's/.*lifts at ([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}) .*/\1/' <<<"$status_line")"
+
+  sudo tee "$RESTORE_SCRIPT" >/dev/null <<EOF
+#!/bin/sh
+# Managed by curfew. Restores /etc/hosts to its pre-curfew contents. Root-owned; do not edit.
+cp -f $HOSTS_BACKUP /etc/hosts
+systemctl stop $RESTORE_TIMER 2>/dev/null || true
+systemctl disable $RESTORE_TIMER 2>/dev/null || true
+rm -f $SYSTEMD_DIR/$RESTORE_TIMER $SYSTEMD_DIR/$RESTORE_SERVICE
+rm -f $HOSTS_BACKUP $RESTORE_SCRIPT
+systemctl daemon-reload 2>/dev/null || true
+EOF
+  sudo chown root:root "$RESTORE_SCRIPT"
+  sudo chmod 700 "$RESTORE_SCRIPT"
+
+  sudo tee "$SYSTEMD_DIR/$RESTORE_SERVICE" >/dev/null <<EOF
+[Unit]
+Description=curfew: restore /etc/hosts after curfew ends
+
+[Service]
+Type=oneshot
+ExecStart=$RESTORE_SCRIPT
+EOF
+
+  sudo tee "$SYSTEMD_DIR/$RESTORE_TIMER" >/dev/null <<EOF
+[Unit]
+Description=curfew: restore timer for /etc/hosts
+
+[Timer]
+OnCalendar=$lift_at:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable "$RESTORE_TIMER"
+  sudo systemctl restart "$RESTORE_TIMER"
+
+  echo "curfew: /etc/hosts will be restored automatically at $lift_at"
 }
 
 main() {
