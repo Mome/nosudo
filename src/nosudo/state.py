@@ -1,4 +1,4 @@
-"""Per-user state records under ``/var/lib/unsudo/<user>.json``.
+"""Per-user state records under ``/var/lib/nosudo/<user>.json``.
 
 The file is root-owned but world-readable (0644) so the blocked user can read
 their own lift time without the sudo they just gave up (specs.md §5).

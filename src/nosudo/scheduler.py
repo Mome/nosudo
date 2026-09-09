@@ -5,9 +5,9 @@ reboot does not reset it and a trigger missed while the machine was off fires on
 next boot (specs.md §3). Units live in ``/etc/systemd/system`` so they survive
 reboot.
 
-The service does **not** run ``unsudo``. Instead it runs a self-contained,
+The service does **not** run ``nosudo``. Instead it runs a self-contained,
 root-owned ``0700`` shell script generated at restrict time, using only
-coreutils + systemctl. This means restore works even if unsudo/python/the venv
+coreutils + systemctl. This means restore works even if nosudo/python/the venv
 is broken or uninstalled by lift time, and root never executes user-writable
 code (specs.md §6).
 """
@@ -33,7 +33,7 @@ def render_restore_script(user: str) -> str:
     service_p = config.service_path(user)
     return (
         "#!/bin/sh\n"
-        f"# Managed by unsudo. Restores sudo for {user}. Root-owned; do not edit.\n"
+        f"# Managed by nosudo. Restores sudo for {user}. Root-owned; do not edit.\n"
         "# Critical step first; everything else is best-effort cleanup.\n"
         f"rm -f {sudoers}\n"
         # `stop` (not just `disable`) so the running timer is dropped from memory;
@@ -44,14 +44,14 @@ def render_restore_script(user: str) -> str:
         f"rm -f {state_f} {script}\n"
         "systemctl daemon-reload 2>/dev/null || true\n"
         "command -v wall >/dev/null 2>&1 && "
-        f'echo "unsudo: sudo rights for {user} have been restored." | wall 2>/dev/null || true\n'
+        f'echo "nosudo: sudo rights for {user} have been restored." | wall 2>/dev/null || true\n'
     )
 
 
 def render_service(user: str) -> str:
     return (
         "[Unit]\n"
-        f"Description=unsudo: restore sudo for {user}\n"
+        f"Description=nosudo: restore sudo for {user}\n"
         "\n"
         "[Service]\n"
         "Type=oneshot\n"
@@ -62,7 +62,7 @@ def render_service(user: str) -> str:
 def render_timer(user: str, lift_at: datetime) -> str:
     return (
         "[Unit]\n"
-        f"Description=unsudo: restore timer for {user}\n"
+        f"Description=nosudo: restore timer for {user}\n"
         "\n"
         "[Timer]\n"
         f"OnCalendar={format_oncalendar(lift_at)}\n"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared configuration + helpers for the unsudo VM test harness.
+# Shared configuration + helpers for the nosudo VM test harness.
 # Sourced by up.sh / e2e.sh / down.sh.
 
 set -euo pipefail
@@ -22,8 +22,8 @@ SSH_PORT="${SSH_PORT:-2222}"
 MEM="${MEM:-2048}"
 CPUS="${CPUS:-2}"
 
-# unsudo is installed for `tester`; call it by absolute path (self-elevates).
-UNSUDO="/home/tester/.local/bin/unsudo"
+# nosudo is installed for `tester`; call it by absolute path (self-elevates).
+NOSUDO="/home/tester/.local/bin/nosudo"
 UV="/home/tester/.local/bin/uv"
 
 SSH_OPTS=(-i "$SSH_KEY" -p "$SSH_PORT"
@@ -32,7 +32,7 @@ SSH_OPTS=(-i "$SSH_KEY" -p "$SSH_PORT"
 
 # --- ssh / control ---------------------------------------------------------
 # vm_ssh  -> as `tester` (the restricted subject; used to OBSERVE sudo state)
-# vm_root -> as `root`   (the test driver; runs unsudo + inspects root files)
+# vm_root -> as `root`   (the test driver; runs nosudo + inspects root files)
 vm_ssh()  { ssh "${SSH_OPTS[@]}" tester@127.0.0.1 "$@"; }
 vm_root() { ssh "${SSH_OPTS[@]}" root@127.0.0.1 "$@"; }
 
@@ -59,17 +59,17 @@ wait_ssh() {
 
 # The Debian cloud kernel has no 9p, so we can't share the repo over virtfs.
 # Instead copy it into the guest over ssh (tar stream) and install editable.
-provision_unsudo() {
+provision_nosudo() {
   echo ".. ensuring uv is installed in the guest"
   vm_ssh 'test -x ~/.local/bin/uv || (curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -q || wget -qO- https://astral.sh/uv/install.sh | sh -s -- -q)'
-  echo ".. copying repo into the guest (~/unsudo)"
+  echo ".. copying repo into the guest (~/nosudo)"
   tar czf - -C "$REPO_DIR" \
       --exclude=.git --exclude=.venv --exclude=vm/.work \
       --exclude=__pycache__ --exclude='*.pyc' --exclude=.pytest_cache . \
-    | vm_ssh 'rm -rf ~/unsudo && mkdir -p ~/unsudo && tar xzf - -C ~/unsudo'
-  echo ".. installing unsudo as an editable uv tool"
-  vm_ssh "$UV tool install --reinstall --editable ~/unsudo"
-  vm_ssh "test -x $UNSUDO"
+    | vm_ssh 'rm -rf ~/nosudo && mkdir -p ~/nosudo && tar xzf - -C ~/nosudo'
+  echo ".. installing nosudo as an editable uv tool"
+  vm_ssh "$UV tool install --reinstall --editable ~/nosudo"
+  vm_ssh "test -x $NOSUDO"
 }
 
 # --- seed (cloud-init NoCloud ISO) -----------------------------------------

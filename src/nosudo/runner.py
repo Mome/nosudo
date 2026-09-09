@@ -1,6 +1,6 @@
 """Side-effect execution with a uniform ``--dry-run`` gate.
 
-Every mutation in unsudo (running a command, writing a managed file) goes
+Every mutation in nosudo (running a command, writing a managed file) goes
 through a ``Runner`` so that ``--dry-run`` can print intended actions instead of
 performing them, and so logging is consistent.
 """

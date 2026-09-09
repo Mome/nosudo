@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
-from unsudo import config, state
-from unsudo.runner import Runner
+from nosudo import config, state
+from nosudo.runner import Runner
 
 
-def test_state_round_trip(unsudo_dirs):
+def test_state_round_trip(nosudo_dirs):
     runner = Runner(dry_run=False)
     created = datetime(2026, 6, 12, 16, 0).astimezone()
     lift = created + timedelta(hours=2)
@@ -21,7 +21,7 @@ def test_state_round_trip(unsudo_dirs):
     assert mode == 0o644
 
 
-def test_list_all_and_remove(unsudo_dirs):
+def test_list_all_and_remove(nosudo_dirs):
     runner = Runner(dry_run=False)
     now = datetime.now().astimezone()
     for name in ("alice", "bob"):
@@ -35,7 +35,7 @@ def test_list_all_and_remove(unsudo_dirs):
     assert {r.user for r in state.list_all()} == {"bob"}
 
 
-def test_update_lift_time(unsudo_dirs):
+def test_update_lift_time(nosudo_dirs):
     runner = Runner(dry_run=False)
     now = datetime.now().astimezone()
     record = state.build("alice", now, now + timedelta(hours=1))

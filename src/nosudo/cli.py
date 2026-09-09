@@ -42,7 +42,7 @@ def reexec_with_sudo(raw_argv: list[str]) -> None:
     elevate. Does not return on success (replaces the process image).
     """
     exe = config.executable()
-    print("unsudo needs root for this; re-running under sudo…", file=sys.stderr)
+    print("nosudo needs root for this; re-running under sudo…", file=sys.stderr)
     try:
         os.execvp("sudo", ["sudo", exe, *raw_argv])
     except OSError as exc:  # sudo missing/unavailable
@@ -56,7 +56,7 @@ def cmd_restrict(args: argparse.Namespace, runner: Runner) -> None:
 
     if state.exists(user) or sudoers.is_active(user) or scheduler.is_active(user):
         raise CommandError(
-            f"{user} is already restricted; use `unsudo extend` to change the lift time"
+            f"{user} is already restricted; use `nosudo extend` to change the lift time"
         )
 
     # Warn-and-proceed: surface open root leaks without blocking (specs.md §6).
@@ -67,7 +67,7 @@ def cmd_restrict(args: argparse.Namespace, runner: Runner) -> None:
         )
         for f in opens:
             runner.warn(f"  - {f.vector}: {f.detail}")
-        runner.warn("proceeding anyway; run `unsudo check` for the full audit")
+        runner.warn("proceeding anyway; run `nosudo check` for the full audit")
 
     created: list[str] = []
     try:
@@ -151,7 +151,7 @@ def cmd_check(args: argparse.Namespace, runner: Runner) -> None:
 # -- parser ----------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="unsudo",
+        prog="nosudo",
         description="Time-boxed, reboot/crash-safe revocation of a user's sudo rights.",
     )
     parser.add_argument(

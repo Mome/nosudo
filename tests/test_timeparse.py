@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from unsudo.timeparse import (
+from nosudo.timeparse import (
     TimeParseError,
     format_oncalendar,
     format_remaining,

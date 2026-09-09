@@ -1,4 +1,4 @@
-from unsudo import notify
+from nosudo import notify
 
 
 def _record_runs(monkeypatch):

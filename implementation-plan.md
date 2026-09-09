@@ -1,4 +1,4 @@
-# unsudo — Implementation Plan (v1)
+# nosudo — Implementation Plan (v1)
 
 Implements the specification in [specs.md](specs.md). v1 scope: revoke **sudo** for a bounded
 time with a reboot/crash-safe restore. `extend` is root-only; self-service extend, leak-closing,
@@ -11,13 +11,13 @@ and non-sudo restrictions are out of scope (see specs §8).
 - **Language:** Python 3 (stdlib only where possible; `subprocess` for `systemctl`/`visudo`).
 - **Tooling:** `uv` for env/deps/running (`uv run`, `uv add`, `uv sync`); committed `uv.lock`. No
   bare `pip`/`venv`/`pipx`. See [CLAUDE.md](CLAUDE.md).
-- **Packaging:** `pyproject.toml` with a console-script entry point `unsudo = unsudo.cli:main`.
+- **Packaging:** `pyproject.toml` with a console-script entry point `nosudo = nosudo.cli:main`.
 - **Install model:** a **user tool** — `uv tool install --editable .` (lands in `~/.local/bin`).
   Not installed as root.
 - **Privilege:** `restrict`/`extend`/`restore` self-elevate by re-exec under `sudo` when not root
   (prompts for a password); `status`/`check` need no privilege.
-- **Unattended restore is decoupled from unsudo:** the systemd service runs a generated root-owned
-  `0700` coreutils script, never `unsudo` — robust even if the user-installed tool/venv is broken
+- **Unattended restore is decoupled from nosudo:** the systemd service runs a generated root-owned
+  `0700` coreutils script, never `nosudo` — robust even if the user-installed tool/venv is broken
   at lift time.
 
 ```
@@ -25,7 +25,7 @@ specs.md
 implementation-plan.md
 pyproject.toml
 README.md
-src/unsudo/
+src/nosudo/
   __init__.py
   cli.py          # argparse, --dry-run, sudo self-elevation, dispatch
   config.py       # artifact paths + naming; executable(); safe_exists()
@@ -33,12 +33,12 @@ src/unsudo/
   timeparse.py    # --for / --until -> absolute aware datetime
   sudoers.py      # render/validate/install/remove the deny drop-in
   scheduler.py    # render/install/remove timer+service + root-owned restore script
-  state.py        # read/write /var/lib/unsudo/<user>.json; status listing
+  state.py        # read/write /var/lib/nosudo/<user>.json; status listing
   sessions.py     # sudo -K + warn on existing privileged sessions
   notify.py       # best-effort wall / notify-send
   audit.py        # `check`: enumerate open root-access vectors
 tests/
-  conftest.py         # unsudo_dirs fixture (temp artifact dirs)
+  conftest.py         # nosudo_dirs fixture (temp artifact dirs)
   test_timeparse.py
   test_render.py      # sudoers + unit + restore-script rendering
   test_state.py       # state (de)serialization, listing, lift-time update
@@ -51,15 +51,15 @@ tests/
 
 | Artifact       | Path                                      | Mode | Owner | Notes                                  |
 |----------------|-------------------------------------------|------|-------|----------------------------------------|
-| Deny drop-in   | `/etc/sudoers.d/zz-unsudo-<user>`         | 0440 | root  | `zz-` => loads last, last-match-wins.   |
-| State file     | `/var/lib/unsudo/<user>.json`             | 0644 | root  | World-readable so blocked user reads it.|
-| Restore script | `/var/lib/unsudo/restore-<user>.sh`       | 0700 | root  | Coreutils-only; what the service runs.  |
-| Restore timer  | `/etc/systemd/system/unsudo-restore-<user>.timer`   | 0644 | root | `OnCalendar` + `Persistent=true`. |
-| Restore svc    | `/etc/systemd/system/unsudo-restore-<user>.service` | 0644 | root | `Type=oneshot`, runs the script. |
+| Deny drop-in   | `/etc/sudoers.d/zz-nosudo-<user>`         | 0440 | root  | `zz-` => loads last, last-match-wins.   |
+| State file     | `/var/lib/nosudo/<user>.json`             | 0644 | root  | World-readable so blocked user reads it.|
+| Restore script | `/var/lib/nosudo/restore-<user>.sh`       | 0700 | root  | Coreutils-only; what the service runs.  |
+| Restore timer  | `/etc/systemd/system/nosudo-restore-<user>.timer`   | 0644 | root | `OnCalendar` + `Persistent=true`. |
+| Restore svc    | `/etc/systemd/system/nosudo-restore-<user>.service` | 0644 | root | `Type=oneshot`, runs the script. |
 
 **Deny drop-in content**
 ```
-# Managed by unsudo. Do not edit. Auto-restores at <lift_at>.
+# Managed by nosudo. Do not edit. Auto-restores at <lift_at>.
 <user> ALL=(ALL) !ALL
 ```
 
@@ -70,37 +70,37 @@ tests/
   "user": "alice",
   "created_at": "2026-06-12T16:00:00+02:00",
   "lift_at": "2026-06-12T18:00:00+02:00",
-  "sudoers_file": "/etc/sudoers.d/zz-unsudo-alice",
-  "timer_unit": "unsudo-restore-alice.timer",
-  "service_unit": "unsudo-restore-alice.service"
+  "sudoers_file": "/etc/sudoers.d/zz-nosudo-alice",
+  "timer_unit": "nosudo-restore-alice.timer",
+  "service_unit": "nosudo-restore-alice.service"
 }
 ```
 
-**Restore script** (`/var/lib/unsudo/restore-alice.sh`, root-owned 0700)
+**Restore script** (`/var/lib/nosudo/restore-alice.sh`, root-owned 0700)
 ```sh
 #!/bin/sh
-# Managed by unsudo. Root-owned; do not edit. Critical step first.
-rm -f /etc/sudoers.d/zz-unsudo-alice
-systemctl disable unsudo-restore-alice.timer 2>/dev/null || true
-rm -f /etc/systemd/system/unsudo-restore-alice.timer /etc/systemd/system/unsudo-restore-alice.service
-rm -f /var/lib/unsudo/alice.json /var/lib/unsudo/restore-alice.sh
+# Managed by nosudo. Root-owned; do not edit. Critical step first.
+rm -f /etc/sudoers.d/zz-nosudo-alice
+systemctl disable nosudo-restore-alice.timer 2>/dev/null || true
+rm -f /etc/systemd/system/nosudo-restore-alice.timer /etc/systemd/system/nosudo-restore-alice.service
+rm -f /var/lib/nosudo/alice.json /var/lib/nosudo/restore-alice.sh
 systemctl daemon-reload 2>/dev/null || true
-command -v wall >/dev/null 2>&1 && echo "unsudo: sudo rights for alice have been restored." | wall || true
+command -v wall >/dev/null 2>&1 && echo "nosudo: sudo rights for alice have been restored." | wall || true
 ```
 
-**Service unit** (runs the script, not unsudo)
+**Service unit** (runs the script, not nosudo)
 ```
 [Unit]
-Description=unsudo: restore sudo for alice
+Description=nosudo: restore sudo for alice
 [Service]
 Type=oneshot
-ExecStart=/var/lib/unsudo/restore-alice.sh
+ExecStart=/var/lib/nosudo/restore-alice.sh
 ```
 
 **Timer unit**
 ```
 [Unit]
-Description=unsudo: restore timer for alice
+Description=nosudo: restore timer for alice
 [Timer]
 OnCalendar=2026-06-12 18:00:00
 Persistent=true
@@ -145,7 +145,7 @@ does not return on success. After elevation the flows below run as root.
 4. `notify.end(user)` (best-effort). Running twice is a clean no-op.
 
 ### `status`  *(non-privileged, read-only)*
-- List every `/var/lib/unsudo/*.json`; print `user — lifts at <lift_at> (<remaining> left)`.
+- List every `/var/lib/nosudo/*.json`; print `user — lifts at <lift_at> (<remaining> left)`.
 - Cross-check the timer's next-elapse where readable; note drift if any.
 
 ### `check [<user>]`  *(non-privileged, read-only)*
@@ -172,19 +172,19 @@ does not return on success. After elevation the flows below run as root.
 
 - **Unit:** `uv run pytest` — `timeparse`, sudoers/unit rendering, state round-trip, the
   `extend` monotonic invariant. No root needed.
-- **Dry run:** `unsudo restrict alice --for 2h --dry-run` prints sudoers + units, touches nothing.
+- **Dry run:** `nosudo restrict alice --for 2h --dry-run` prints sudoers + units, touches nothing.
 - **End-to-end (disposable VM, throwaway user):**
-  1. `unsudo restrict testuser --for 2m` (as a sudo-capable user) -> prompts for password via the
+  1. `nosudo restrict testuser --for 2m` (as a sudo-capable user) -> prompts for password via the
      self-elevation, then deny file present, `sudo -l -U testuser` shows deny, `sudo` refused as
-     testuser; `systemctl list-timers | grep unsudo` shows the absolute elapse.
-  2. `unsudo status` as **testuser** (no sudo) prints the lift time -> confirms non-priv read.
-  3. **Decoupling test:** confirm the service `ExecStart` is the root-owned script (not unsudo);
-     uninstall unsudo, then verify restore still fires (the script has no unsudo/python dependency).
+     testuser; `systemctl list-timers | grep nosudo` shows the absolute elapse.
+  2. `nosudo status` as **testuser** (no sudo) prints the lift time -> confirms non-priv read.
+  3. **Decoupling test:** confirm the service `ExecStart` is the root-owned script (not nosudo);
+     uninstall nosudo, then verify restore still fires (the script has no nosudo/python dependency).
   4. **Reboot test:** `--for 10m`, reboot now -> still restricted after boot, timer still scheduled.
   5. **Missed-downtime test:** `--for 2m`, power off before elapse, boot after lift time ->
      `Persistent=true` runs the script on boot (deny gone, units/script cleaned, `status` empty).
-  6. **extend:** `unsudo extend testuser --for 30m` moves lift later; verify a sooner time is refused.
-  7. **Idempotency:** `unsudo restore testuser` twice -> second run is a clean no-op.
+  6. **extend:** `nosudo extend testuser --for 30m` moves lift later; verify a sooner time is refused.
+  7. **Idempotency:** `nosudo restore testuser` twice -> second run is a clean no-op.
 
 ### VM harness (built — see `vm/`)
 
@@ -194,12 +194,12 @@ cycle and a manipulable clock (nspawn shares the host `CLOCK_REALTIME`).
 - **Layout:** `vm/lib.sh` (shared config + qemu/ssh helpers), `vm/up.sh`, `vm/e2e.sh`, `vm/ssh.sh`,
   `vm/down.sh`, `vm/cloud-init/{user-data,meta-data}`, `vm/README.md`. Artifacts in `vm/.work/`.
 - **Base:** Debian 12 *generic cloud* qcow2; cloud-init creates `tester` (passwordless sudo, for
-  unattended runs), installs `uv`, mounts the host repo read-only over **9p** at `/mnt/unsudo`, and
+  unattended runs), installs `uv`, mounts the host repo read-only over **9p** at `/mnt/nosudo`, and
   `uv tool install --editable`s it. SSH via `hostfwd tcp::2222-:22`.
 - **e2e phases:** (1) functional incl. the **armed-timer regression** (`NextElapse > 0`) that guards
   the lockout bug; (2) survives reboot; (3) **missed-downtime via the RTC trick** —
-  `restrict --until T`, **uninstall unsudo**, power off, relaunch with `-rtc base=<past T>`;
-  `Persistent=true` must fire the root-owned restore script on boot with unsudo gone (also proves
+  `restrict --until T`, **uninstall nosudo**, power off, relaunch with `-rtc base=<past T>`;
+  `Persistent=true` must fire the root-owned restore script on boot with nosudo gone (also proves
   decoupling).
 - **Reset:** clean qcow2 overlay over a cached base each `up`.
 - **Run:** `vm/up.sh && vm/e2e.sh`. **Host prereq:** a seed-ISO builder (`xorriso` /

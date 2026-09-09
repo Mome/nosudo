@@ -1,16 +1,16 @@
 from datetime import datetime, timedelta
 
-from unsudo import state
-from unsudo.cli import main
-from unsudo.runner import Runner
+from nosudo import state
+from nosudo.cli import main
+from nosudo.runner import Runner
 
 
-def test_status_empty(unsudo_dirs, capsys):
+def test_status_empty(nosudo_dirs, capsys):
     assert main(["status"]) == 0
     assert "No active restrictions." in capsys.readouterr().out
 
 
-def test_restrict_dry_run_changes_nothing(unsudo_dirs, capsys):
+def test_restrict_dry_run_changes_nothing(nosudo_dirs, capsys):
     rc = main(["--dry-run", "restrict", "alice", "--for", "1h"])
     out = capsys.readouterr().out
     assert rc == 0
@@ -19,7 +19,7 @@ def test_restrict_dry_run_changes_nothing(unsudo_dirs, capsys):
     assert not state.exists("alice")
 
 
-def test_restrict_rejects_when_already_restricted(unsudo_dirs, capsys):
+def test_restrict_rejects_when_already_restricted(nosudo_dirs, capsys):
     runner = Runner(dry_run=False)
     now = datetime.now().astimezone()
     state.write(state.build("alice", now, now + timedelta(hours=1)), runner)
@@ -29,7 +29,7 @@ def test_restrict_rejects_when_already_restricted(unsudo_dirs, capsys):
     assert "already restricted" in capsys.readouterr().err
 
 
-def test_extend_is_lengthen_only(unsudo_dirs, capsys):
+def test_extend_is_lengthen_only(nosudo_dirs, capsys):
     runner = Runner(dry_run=False)
     now = datetime.now().astimezone()
     # Current lift is far in the future.
@@ -41,13 +41,13 @@ def test_extend_is_lengthen_only(unsudo_dirs, capsys):
     assert "lengthen-only" in capsys.readouterr().err
 
 
-def test_extend_requires_active_restriction(unsudo_dirs, capsys):
+def test_extend_requires_active_restriction(nosudo_dirs, capsys):
     rc = main(["--dry-run", "extend", "ghost", "--for", "1h"])
     assert rc == 1
     assert "not currently restricted" in capsys.readouterr().err
 
 
-def test_status_lists_active(unsudo_dirs, capsys):
+def test_status_lists_active(nosudo_dirs, capsys):
     runner = Runner(dry_run=False)
     now = datetime.now().astimezone()
     state.write(state.build("alice", now, now + timedelta(hours=2)), runner)

@@ -1,10 +1,10 @@
 import pytest
 
-from unsudo import config
+from nosudo import config
 
 
 @pytest.fixture
-def unsudo_dirs(tmp_path, monkeypatch):
+def nosudo_dirs(tmp_path, monkeypatch):
     """Redirect all on-disk artifact dirs into a temp tree."""
     state = tmp_path / "state"
     sudoers = tmp_path / "sudoers.d"

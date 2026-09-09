@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
-from unsudo import scheduler
-from unsudo.runner import Runner
+from nosudo import scheduler
+from nosudo.runner import Runner
 
 
-def test_install_restarts_timer_to_rearm(unsudo_dirs, capsys):
+def test_install_restarts_timer_to_rearm(nosudo_dirs, capsys):
     """install must `restart` the timer, not `enable --now`.
 
     `enable --now` is a no-op on an already-running timer of the same name, which
@@ -13,5 +13,5 @@ def test_install_restarts_timer_to_rearm(unsudo_dirs, capsys):
     lift = datetime.now().astimezone() + timedelta(minutes=5)
     scheduler.install("alice", lift, Runner(dry_run=True))
     out = capsys.readouterr().out
-    assert "systemctl restart unsudo-restore-alice.timer" in out
+    assert "systemctl restart nosudo-restore-alice.timer" in out
     assert "enable --now" not in out

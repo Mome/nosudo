@@ -35,7 +35,7 @@ def _broadcast(message: str) -> None:
     if shutil.which("notify-send") and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
         with contextlib.suppress(OSError, subprocess.SubprocessError):
             subprocess.run(
-                ["notify-send", "unsudo", message],
+                ["notify-send", "nosudo", message],
                 check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -47,7 +47,7 @@ def start(user: str, lift_at: datetime, runner: Runner) -> None:
         runner.info(f"[dry-run] would notify {user}: restriction starts")
         return
     _broadcast(
-        f"unsudo: sudo rights for {user} are restricted until "
+        f"nosudo: sudo rights for {user} are restricted until "
         f"{lift_at.strftime('%Y-%m-%d %H:%M')} and will be restored automatically."
     )
 
@@ -56,4 +56,4 @@ def end(user: str, runner: Runner) -> None:
     if runner.dry_run:
         runner.info(f"[dry-run] would notify {user}: restriction ended")
         return
-    _broadcast(f"unsudo: sudo rights for {user} have been restored.")
+    _broadcast(f"nosudo: sudo rights for {user} have been restored.")

@@ -23,7 +23,7 @@ class SudoersError(RuntimeError):
 
 def render(user: str, lift_at: datetime) -> str:
     return (
-        "# Managed by unsudo. Do not edit.\n"
+        "# Managed by nosudo. Do not edit.\n"
         f"# Auto-restores at {lift_at.isoformat()}.\n"
         f"{user} ALL=(ALL) !ALL\n"
     )

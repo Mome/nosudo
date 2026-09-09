@@ -1,4 +1,4 @@
-# unsudo — Specification
+# nosudo — Specification
 
 > A CLI tool that **restricts a user's privileges for a bounded period of time** and
 > automatically restores them afterwards. The restore is **reboot- and crash-safe**.
@@ -25,7 +25,7 @@ scope today.
 The tool's primary purpose is **self-binding** — a user voluntarily removes their own sudo
 rights to enforce discipline, and cannot give them back early.
 
-This works because of a self-reinforcing property: **`unsudo` needs root to alter the
+This works because of a self-reinforcing property: **`nosudo` needs root to alter the
 restriction (the deny file and timer units are root-owned in root-only directories), so once a
 user's sudo is removed they have also lost the ability to delete the deny file or disable the
 restore timer.** The same privilege being surrendered is the one required to undo the surrender.
@@ -56,7 +56,7 @@ sole path to root** (see Threat model below).
 
 Safety rests on two pieces of **on-disk** state, both of which survive reboot:
 
-1. **The restriction itself** is a file: `/etc/sudoers.d/zz-unsudo-<user>` containing an explicit
+1. **The restriction itself** is a file: `/etc/sudoers.d/zz-nosudo-<user>` containing an explicit
    deny rule. Because it is a file on disk, the restriction remains in force across reboots until
    it is deleted — satisfying requirement #6 (rebooting is not an escape hatch).
 
@@ -68,17 +68,17 @@ Safety rests on two pieces of **on-disk** state, both of which survive reboot:
      runs the restore service **immediately on next boot**. This is the crash-safety guarantee
      (requirement #5).
 
-The restore service does **not** run `unsudo`. It runs a self-contained, root-owned `0700` shell
-script (`/var/lib/unsudo/restore-<user>.sh`) generated at restrict time, using only coreutils +
+The restore service does **not** run `nosudo`. It runs a self-contained, root-owned `0700` shell
+script (`/var/lib/nosudo/restore-<user>.sh`) generated at restrict time, using only coreutils +
 `systemctl`. Its first action is the safety-critical one — `rm -f` the deny drop-in — followed by
 best-effort cleanup of the units, state file and itself. This means restore works **even if
-unsudo / python / the venv is broken, edited, or uninstalled** by lift time, and root never
-executes user-writable code. (See §6 for why this matters: unsudo is a *user-installed* tool.)
+nosudo / python / the venv is broken, edited, or uninstalled** by lift time, and root never
+executes user-writable code. (See §6 for why this matters: nosudo is a *user-installed* tool.)
 
 The restore action is **idempotent**: delete the sudoers file, delete the state record, disable
 and remove the units and script, reload systemd. Running it more than once is harmless.
 
-A per-user **state file** at `/var/lib/unsudo/<user>.json` records the restore time, creation
+A per-user **state file** at `/var/lib/nosudo/<user>.json` records the restore time, creation
 time, and the managed file/unit paths, so status can be reported and restore can clean up
 deterministically.
 
@@ -121,12 +121,12 @@ two modes.
 
 | Command                                       | Description                                                       |
 |-----------------------------------------------|------------------------------------------------------------------|
-| `unsudo restrict <user> --for <duration>`     | Restrict for a relative duration, e.g. `--for 2h`, `--for 90m`.  |
-| `unsudo restrict <user> --until <timestamp>`  | Restrict until an absolute time, e.g. `--until 18:00`.           |
-| `unsudo extend <user> --for/--until <t>`      | Lengthen an active restriction (≥ current lift time). Root-only. |
-| `unsudo restore <user>`                       | Manually restore early (root). The unattended restore is a script, not this. |
-| `unsudo status`                               | Show active restrictions, the absolute lift time, and time left. |
-| `unsudo check <user>`                         | Audit the §7 root-access vectors and report which leaks are open.|
+| `nosudo restrict <user> --for <duration>`     | Restrict for a relative duration, e.g. `--for 2h`, `--for 90m`.  |
+| `nosudo restrict <user> --until <timestamp>`  | Restrict until an absolute time, e.g. `--until 18:00`.           |
+| `nosudo extend <user> --for/--until <t>`      | Lengthen an active restriction (≥ current lift time). Root-only. |
+| `nosudo restore <user>`                       | Manually restore early (root). The unattended restore is a script, not this. |
+| `nosudo status`                               | Show active restrictions, the absolute lift time, and time left. |
+| `nosudo check <user>`                         | Audit the §7 root-access vectors and report which leaks are open.|
 | `--dry-run` (global flag)                     | Show intended sudoers/unit actions without changing the system.  |
 
 If `<user>` is omitted, the **invoking user** (`SUDO_USER`) is the target — ergonomic for the
@@ -134,7 +134,7 @@ primary self-control use case. An explicit `<user>` is still accepted for admini
 
 ### Installation & privilege
 
-`unsudo` is a **user-installed tool** (`uv tool install --editable .`), not installed as root.
+`nosudo` is a **user-installed tool** (`uv tool install --editable .`), not installed as root.
 The privileged commands (`restrict`, `extend`, `restore`) **self-elevate**: when run by a non-root
 user they re-exec under `sudo`, which prompts for a password. This is good UX and does **not**
 weaken self-control — the prompt only succeeds at *bind time*, when the user still has sudo; once
@@ -142,15 +142,15 @@ restricted they have no sudo, so trying to self-`restore` early simply fails to 
 unattended restore needs no password (systemd runs it as root). `status` and `check` need no
 privilege at all.
 
-Because unsudo is user-installed (and its source is therefore user-writable), the unattended
-restore is deliberately **decoupled from unsudo**: see the root-owned restore script in §3.
+Because nosudo is user-installed (and its source is therefore user-writable), the unattended
+restore is deliberately **decoupled from nosudo**: see the root-owned restore script in §3.
 
 Behavior when the user is already restricted: refuse with a clear message (`extend` is the
 intended way to change an active restriction; see below).
 
 ### `extend` semantics (lengthen-only)
 
-`unsudo extend <user>` changes the lift time of an **active** restriction. It is **monotonic and
+`nosudo extend <user>` changes the lift time of an **active** restriction. It is **monotonic and
 lengthen-only**: the new lift time must be **≥ the current one**. Rationale:
 - **Lengthening** tightens the contract — it can never be used to cheat, only to punish more —
   so it is always safe, even for the blocked user.
@@ -163,7 +163,7 @@ and sudoers files, and the blocked user has no sudo. v1 `extend` is therefore **
 
 **Planned (later):** a *self-service lengthen-only* path via one narrow privileged hook — a
 tightly-scoped `sudoers` NOPASSWD entry (or a small setuid helper) allowing **only**
-`unsudo extend`, with the binary enforcing `new_time ≥ current_time`. This grants a one-line sudo
+`nosudo extend`, with the binary enforcing `new_time ≥ current_time`. This grants a one-line sudo
 rule precisely while general sudo is removed, which is consistent with the self-control model.
 Deferred because any privileged helper is attack surface (a bug could set an earlier time or exec
 as root) and needs careful validation.
@@ -172,14 +172,14 @@ as root) and needs careful validation.
 
 A restricted user has no sudo, but must still be able to see when their rights return **without
 any privilege**. Therefore:
-- `unsudo status` is **read-only and non-privileged** — runnable by the restricted user.
+- `nosudo status` is **read-only and non-privileged** — runnable by the restricted user.
   It prints the absolute lift time and remaining time, e.g.
   `alice: restricted — lifts at 2026-06-12 18:00 (2h 13m left)`.
 - It derives this from the per-user state file plus the systemd timer's next-elapse.
-- As a fallback that needs neither root nor `unsudo`, the schedule is visible via
-  `systemctl list-timers unsudo-restore-<user>.timer`.
+- As a fallback that needs neither root nor `nosudo`, the schedule is visible via
+  `systemctl list-timers nosudo-restore-<user>.timer`.
 
-### `unsudo check`
+### `nosudo check`
 
 Read-only audit of the alternative-root vectors in §7 (group membership such as `docker`/`disk`/
 `lxd`, set root password, SUID/capability binaries, root SSH, pre-existing root sessions, etc.).
@@ -214,10 +214,10 @@ session if present); failure to notify never blocks or fails the restrict/restor
 | Rejected scheduling alternatives | not `systemd-run --on-active`, not `at` | Transient/monotonic timers reset on reboot; `at`/atd may be absent and is not reboot-persistent.       |
 | Time input                       | accept duration OR absolute time        | Convenience; both are normalized to a single absolute restore timestamp that is persisted/scheduled.   |
 | Install model                    | user tool (`uv tool install -e`)        | Not installed as root; lives in `~/.local`. Keeps install simple; the root-run restore is decoupled (below).|
-| Privilege model                  | self-elevate via `sudo` (prompts)       | `restrict`/`extend`/`restore` re-exec under `sudo` when not root; better UX than manual `sudo unsudo`.   |
+| Privilege model                  | self-elevate via `sudo` (prompts)       | `restrict`/`extend`/`restore` re-exec under `sudo` when not root; better UX than manual `sudo nosudo`.   |
 | Elevation doesn't weaken binding | prompt only at bind time                | The user has sudo when restricting; once restricted they have no sudo, so self-`restore` fails to elevate.|
-| Restore is unsudo-independent    | root-owned `0700` coreutils script      | Restore must not depend on user-writable code/python/venv at lift time (robustness) and root must not run |
-|                                  |                                         | user-writable code (hygiene). Generated at restrict time; systemd runs the script, not `unsudo`.        |
+| Restore is nosudo-independent    | root-owned `0700` coreutils script      | Restore must not depend on user-writable code/python/venv at lift time (robustness) and root must not run |
+|                                  |                                         | user-writable code (hygiene). Generated at restrict time; systemd runs the script, not `nosudo`.        |
 | Timer must be re-armed           | `enable` + `restart`, not `enable --now`| `--now` is a no-op on an already-active timer of the same name → stale schedule → **no restore (lockout)**.|
 | Restore script stops the timer   | `systemctl stop` before removing units  | `disable` only removes the symlink; a running timer must be stopped or it lingers as a not-found ghost.  |
 | Self-binding enforcement         | root-owned deny file + units + script   | Losing sudo also removes the ability to edit them, so the contract is self-reinforcing (no extra guard).|
@@ -226,15 +226,15 @@ session if present); failure to notify never blocks or fails the restrict/restor
 | Default target = invoking user   | `<user>` optional, defaults to SUDO_USER| Self-control is the primary use case; explicit `<user>` still supported for admin mode.                  |
 | Open leaks don't block restrict  | warn-and-proceed, no `--force`          | Surface false-confidence risk without friction; the user judges whether the open leaks matter.          |
 | Same code path for both modes    | no separate "admin" vs "self" logic     | For the restricted user the modes are identical; the only difference (a separate admin account) is external.|
-| `unsudo check` audit             | planned feature, also auto-run          | A contract trivially undoable via `docker`/`su` gives false confidence; surface open leaks before committing.|
+| `nosudo check` audit             | planned feature, also auto-run          | A contract trivially undoable via `docker`/`su` gives false confidence; surface open leaks before committing.|
 | Notifications                    | best-effort, non-blocking               | User should know when a restriction starts/ends; but notification failure must never block restrict/restore.|
 | `extend` is lengthen-only        | new lift time must be ≥ current         | Lengthening only tightens the contract (safe); shortening would be an early escape and is disallowed.    |
 | `extend` is root-only in v1      | self-service lengthen deferred          | Modifying root-owned units needs root; a constrained self-service hook is attack surface, deferred.      |
 | Restore idempotency              | required                                | Persistent timer, manual restore, and boot reconciliation can race; an idempotent restore is safe.     |
-| State location                   | `/var/lib/unsudo/<user>.json`           | Standard location for variable program state; lets `status` and restore work deterministically.        |
+| State location                   | `/var/lib/nosudo/<user>.json`           | Standard location for variable program state; lets `status` and restore work deterministically.        |
 | State file is user-readable      | mode `0644` (root-owned, world-read)    | The restricted user has no sudo but must still read their own lift time; only root may write it.        |
 | `status` is non-privileged       | no root required, read-only             | The whole point is the blocked user can check when rights return without the rights they just gave up.  |
-| Command naming caveat            | command is `unsudo`                     | Note: name clashes with the PyPI BDD tool `unsudo`; acceptable for local install, flagged for awareness.|
+| Command naming caveat            | command is `nosudo`                     | Note: name clashes with the PyPI BDD tool `nosudo`; acceptable for local install, flagged for awareness.|
 
 ---
 
@@ -295,4 +295,4 @@ and are explicitly out of scope.
   so they can add time to their own block without restoring general sudo.
 - Restriction types beyond sudo (general framework).
 - Actually *closing* §7 leaks during a restriction (e.g. temporarily removing `docker`/`disk`
-  group membership), not just reporting them via `unsudo check`.
+  group membership), not just reporting them via `nosudo check`.
