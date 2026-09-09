@@ -24,6 +24,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/nosudo"]
 
+[tool.hatch.build.targets.wheel.shared-scripts]
+"scripts/curfew" = "curfew"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

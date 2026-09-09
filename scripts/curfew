@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# curfew — apply an hblock website-blocking profile, then lock yourself out of
+# sudo via nosudo so the block can't be undone before it lifts.
+#
+# Profiles live in $CURFEW_PROFILES_DIR (default: ~/.config/curfew/profiles/<name>/)
+# and are plain hblock input files:
+#   sources.list  — blocklist URLs, one per line (hblock -S)
+#   deny.list     — your own domains to block, one per line (hblock -D)
+#   allow.list    — exceptions, one per line (hblock -A)
+# All three are optional; a missing file just means "use hblock's default"
+# is NOT passed for that piece (hblock falls back to its own built-in/config
+# lookup, not an empty list) — see `curfew --new` for a scaffold with empty files.
+
+set -euo pipefail
+
+PROFILES_DIR="${CURFEW_PROFILES_DIR:-$HOME/.config/curfew/profiles}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  curfew <profile> --for <duration>     Apply profile, lock sudo for a duration (e.g. 2h, 90m)
+  curfew <profile> --until <time>       Apply profile, lock sudo until an absolute time
+  curfew --list                         List available profiles
+  curfew --new <profile>                Scaffold a new empty profile
+  curfew --help                         Show this help
+
+Profiles directory: $CURFEW_PROFILES_DIR (default: ~/.config/curfew/profiles)
+Each profile is a directory containing any of: sources.list, deny.list, allow.list
+EOF
+}
+
+cmd_list() {
+  if [[ ! -d "$PROFILES_DIR" ]] || [[ -z "$(ls -A "$PROFILES_DIR" 2>/dev/null)" ]]; then
+    echo "curfew: no profiles yet in $PROFILES_DIR (create one with: curfew --new <name>)"
+    return 0
+  fi
+  echo "Profiles in $PROFILES_DIR:"
+  for dir in "$PROFILES_DIR"/*/; do
+    [[ -d "$dir" ]] || continue
+    name="$(basename "$dir")"
+    parts=()
+    [[ -f "$dir/sources.list" ]] && parts+=("sources")
+    [[ -f "$dir/deny.list" ]] && parts+=("deny")
+    [[ -f "$dir/allow.list" ]] && parts+=("allow")
+    printf '  %-20s %s\n' "$name" "${parts[*]:-<empty>}"
+  done
+}
+
+cmd_new() {
+  local name="$1"
+  local dir="$PROFILES_DIR/$name"
+  if [[ -e "$dir" ]]; then
+    echo "curfew: profile '$name' already exists at $dir" >&2
+    exit 1
+  fi
+  mkdir -p "$dir"
+  : > "$dir/sources.list"
+  : > "$dir/deny.list"
+  : > "$dir/allow.list"
+  echo "curfew: created profile '$name' at $dir"
+  echo "  edit sources.list (blocklist URLs), deny.list (your own domains), allow.list (exceptions)"
+}
+
+cmd_apply() {
+  local profile="$1"
+  shift
+  local dir="$PROFILES_DIR/$profile"
+
+  if [[ ! -d "$dir" ]]; then
+    echo "curfew: unknown profile '$profile' (looked in $dir)" >&2
+    echo "curfew: available profiles:" >&2
+    cmd_list >&2
+    exit 1
+  fi
+
+  if [[ $# -eq 0 ]]; then
+    echo "curfew: need --for <duration> or --until <time> (see: curfew --help)" >&2
+    exit 1
+  fi
+
+  local hblock_args=()
+  [[ -f "$dir/sources.list" ]] && hblock_args+=(-S "$dir/sources.list")
+  [[ -f "$dir/deny.list" ]] && hblock_args+=(-D "$dir/deny.list")
+  [[ -f "$dir/allow.list" ]] && hblock_args+=(-A "$dir/allow.list")
+
+  echo "curfew: applying profile '$profile' via hblock..."
+  sudo hblock "${hblock_args[@]}"
+
+  echo "curfew: locking sudo via nosudo..."
+  nosudo restrict "$@"
+}
+
+main() {
+  if [[ $# -eq 0 ]] || [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    usage
+    exit 0
+  fi
+
+  case "$1" in
+    --list)
+      cmd_list
+      ;;
+    --new)
+      [[ $# -ge 2 ]] || { echo "curfew: --new needs a profile name" >&2; exit 1; }
+      cmd_new "$2"
+      ;;
+    --*)
+      echo "curfew: unknown option '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      cmd_apply "$@"
+      ;;
+  esac
+}
+
+main "$@"
