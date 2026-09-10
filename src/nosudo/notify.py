@@ -16,19 +16,8 @@ from .runner import Runner
 
 
 def _broadcast(message: str) -> None:
-    # ``wall`` reaches the user's terminals; ``notify-send`` is attempted for a
-    # desktop session if available. Both are best-effort and fully silenced:
-    # failures must never leak output (specs.md §5).
-    if shutil.which("wall"):
-        with contextlib.suppress(OSError, subprocess.SubprocessError):
-            subprocess.run(
-                ["wall"],
-                input=message,
-                text=True,
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+    # ``notify-send`` is attempted for a desktop session if available. Best-effort
+    # and fully silenced: failures must never leak output (specs.md §5).
     # Only try notify-send when a session bus actually exists. Otherwise glib
     # tries `dbus-launch --autolaunch`, which fails noisily — and as root (after
     # self-elevation) there is no session bus anyway.

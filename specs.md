@@ -198,8 +198,8 @@ The affected user is notified when a restriction **starts** and when it **ends**
 - **End:** emitted by the restore service/`restore` command after rights are returned (this also
   covers the crash-recovery case where restore fires on next boot).
 
-Delivery uses best-effort local channels (e.g. `wall`, and `notify-send` to the user's desktop
-session if present); failure to notify never blocks or fails the restrict/restore action itself.
+Delivery uses a best-effort local channel (`notify-send` to the user's desktop session if
+present); failure to notify never blocks or fails the restrict/restore action itself.
 
 ---
 

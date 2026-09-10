@@ -15,9 +15,9 @@ def test_notify_send_skipped_without_session_bus(monkeypatch):
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
     notify._broadcast("hello")
     cmds = [c[0] for c in calls]
-    assert "wall" in cmds
     # No notify-send => no futile dbus-launch and no leaked error output.
     assert "notify-send" not in cmds
+    assert not cmds
 
 
 def test_notify_send_used_with_session_bus(monkeypatch):

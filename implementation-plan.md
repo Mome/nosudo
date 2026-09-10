@@ -35,7 +35,7 @@ src/nosudo/
   scheduler.py    # render/install/remove timer+service + root-owned restore script
   state.py        # read/write /var/lib/nosudo/<user>.json; status listing
   sessions.py     # sudo -K + warn on existing privileged sessions
-  notify.py       # best-effort wall / notify-send
+  notify.py       # best-effort notify-send
   audit.py        # `check`: enumerate open root-access vectors
 tests/
   conftest.py         # nosudo_dirs fixture (temp artifact dirs)
@@ -85,7 +85,6 @@ systemctl disable nosudo-restore-alice.timer 2>/dev/null || true
 rm -f /etc/systemd/system/nosudo-restore-alice.timer /etc/systemd/system/nosudo-restore-alice.service
 rm -f /var/lib/nosudo/alice.json /var/lib/nosudo/restore-alice.sh
 systemctl daemon-reload 2>/dev/null || true
-command -v wall >/dev/null 2>&1 && echo "nosudo: sudo rights for alice have been restored." | wall || true
 ```
 
 **Service unit** (runs the script, not nosudo)

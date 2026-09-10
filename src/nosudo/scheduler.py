@@ -43,8 +43,6 @@ def render_restore_script(user: str) -> str:
         f"rm -f {timer_p} {service_p}\n"
         f"rm -f {state_f} {script}\n"
         "systemctl daemon-reload 2>/dev/null || true\n"
-        "command -v wall >/dev/null 2>&1 && "
-        f'echo "nosudo: sudo rights for {user} have been restored." | wall 2>/dev/null || true\n'
     )
 
 
