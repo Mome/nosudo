@@ -8,3 +8,7 @@ build/
 
 # VM harness artifacts
 vm/.work/
+
+# Machine-local Claude Code permissions (contains local paths/usernames)
+.claude/settings.json
+.claude/settings.local.json
