@@ -98,20 +98,27 @@ def format_oncalendar(lift_at: datetime) -> str:
     return lift_at.astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def format_remaining(lift_at: datetime, now: datetime | None = None) -> str:
-    """Human-readable remaining time, e.g. ``2h 13m`` or ``expired``."""
+def format_remaining(
+    lift_at: datetime, now: datetime | None = None, *, include_seconds: bool = False
+) -> str:
+    """Human-readable remaining time, e.g. ``2h 13m`` or ``expired``.
+
+    With ``include_seconds``, always appends a ``Ns`` part, e.g. ``2h 13m 45s``.
+    """
     delta = lift_at - _now_local(now)
     total = int(delta.total_seconds())
     if total <= 0:
         return "expired"
     days, rem = divmod(total, 86400)
     hours, rem = divmod(rem, 3600)
-    minutes, _ = divmod(rem, 60)
+    minutes, seconds = divmod(rem, 60)
     parts = []
     if days:
         parts.append(f"{days}d")
     if hours:
         parts.append(f"{hours}h")
-    if minutes or not parts:
+    if minutes or (not parts and not include_seconds):
         parts.append(f"{minutes}m")
+    if include_seconds:
+        parts.append(f"{seconds}s")
     return " ".join(parts)

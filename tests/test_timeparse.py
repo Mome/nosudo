@@ -68,3 +68,11 @@ def test_format_remaining():
     lift = now + timedelta(hours=2, minutes=13)
     assert format_remaining(lift, now=now) == "2h 13m"
     assert format_remaining(now - timedelta(minutes=1), now=now) == "expired"
+
+
+def test_format_remaining_with_seconds():
+    now = datetime(2026, 6, 12, 12, 0).astimezone()
+    lift = now + timedelta(hours=2, minutes=13, seconds=45)
+    assert format_remaining(lift, now=now, include_seconds=True) == "2h 13m 45s"
+    assert format_remaining(now + timedelta(seconds=45), now=now, include_seconds=True) == "45s"
+    assert format_remaining(now - timedelta(seconds=1), now=now, include_seconds=True) == "expired"

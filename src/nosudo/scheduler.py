@@ -14,6 +14,7 @@ code (specs.md §6).
 
 from __future__ import annotations
 
+import pwd
 from datetime import datetime
 
 from . import config
@@ -22,6 +23,29 @@ from .timeparse import format_oncalendar
 
 UNIT_MODE = 0o644
 SCRIPT_MODE = 0o700
+
+
+def _render_notify_line(user: str) -> str:
+    """Best-effort desktop notification once sudo is restored (specs.md §5).
+
+    This script always runs as root (systemd oneshot service), so it targets
+    ``user``'s own session bus at ``/run/user/<uid>/bus`` rather than relying
+    on an inherited ``DBUS_SESSION_BUS_ADDRESS`` (root has none). Silently
+    does nothing if the uid can't be resolved, notify-send/sudo are missing,
+    or the user has no active session.
+    """
+    try:
+        uid = pwd.getpwnam(user).pw_uid
+    except KeyError:
+        return ""
+    bus = f"/run/user/{uid}/bus"
+    message = f"nosudo: sudo rights for {user} have been restored."
+    return (
+        f"command -v notify-send >/dev/null 2>&1 && [ -S {bus} ] && "
+        f'sudo -u {user} env DBUS_SESSION_BUS_ADDRESS="unix:path={bus}" '
+        f'XDG_RUNTIME_DIR=/run/user/{uid} notify-send nosudo "{message}" '
+        "2>/dev/null || true\n"
+    )
 
 
 def render_restore_script(user: str) -> str:
@@ -43,6 +67,7 @@ def render_restore_script(user: str) -> str:
         f"rm -f {timer_p} {service_p}\n"
         f"rm -f {state_f} {script}\n"
         "systemctl daemon-reload 2>/dev/null || true\n"
+        f"{_render_notify_line(user)}"
     )
 
 

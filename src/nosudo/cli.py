@@ -135,7 +135,8 @@ def cmd_status(args: argparse.Namespace, runner: Runner) -> None:
     for r in records:
         runner.info(
             f"{r.user}: restricted — lifts at "
-            f"{r.lift_dt.strftime('%Y-%m-%d %H:%M')} ({format_remaining(r.lift_dt)} left)"
+            f"{r.lift_dt.strftime('%Y-%m-%d %H:%M')} "
+            f"({format_remaining(r.lift_dt, include_seconds=True)} left)"
         )
 
 
