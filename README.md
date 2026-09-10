@@ -33,6 +33,17 @@ nosudo restrict --for 2h --dry-run     # show what would happen, change nothing
 
 The automatic restore at lift time needs no password — it runs as a root-owned systemd timer.
 
+## Installation
+
+```sh
+pipx install git+https://github.com/mome/nosudo.git
+```
+in case you prefere uv
+
+```sh
+uv tool install git+https://github.com/mome/nosudo.git
+```
+
 ## Development
 
 This project uses [`uv`](https://docs.astral.sh/uv/):
