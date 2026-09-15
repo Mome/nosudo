@@ -8,6 +8,17 @@ rights back early.
 See [specs.md](specs.md) for the full specification and the decisions behind it, and
 [implementation-plan.md](implementation-plan.md) for the design.
 
+## Disclaimer
+
+This tool intentionally locks you out of your own root access for the duration you choose, with
+no built-in override — defeating that early is the whole point, so bugs or misjudged durations can
+leave you locked out longer than planned. It's a self-control tool, not a hard security boundary.
+
+**Before relying on it, set up a separate admin user on the system with a password that takes some
+real effort to get to — give it to a friend, or stash it somewhere inconvenient — as a safety net.**
+
+This project is mostly written by Claude. Review the code before trusting it with your root access.
+
 ## How it works
 
 - The restriction is a deny drop-in at `/etc/sudoers.d/zz-nosudo-<user>` (`<user> ALL=(ALL) !ALL`).
