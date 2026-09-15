@@ -40,7 +40,10 @@ def reexec_with_sudo(raw_argv: list[str]) -> None:
     exe = config.executable()
     print("nosudo needs root for this; re-running under sudo…", file=sys.stderr)
     try:
-        os.execvp("sudo", ["sudo", exe, *raw_argv])
+        # PYTHONDONTWRITEBYTECODE: running as root would otherwise write
+        # root-owned __pycache__ files into the (user-owned) venv, which then
+        # blocks a later non-root `uv tool uninstall`/upgrade with EACCES.
+        os.execvp("sudo", ["sudo", "env", "PYTHONDONTWRITEBYTECODE=1", exe, *raw_argv])
     except OSError as exc:  # sudo missing/unavailable
         raise CommandError(f"could not elevate via sudo: {exc}") from exc
 
