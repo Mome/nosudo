@@ -2,12 +2,16 @@
 # curfew — apply an hblock website-blocking profile, then lock yourself out of
 # sudo via nosudo so the block can't be undone before it lifts.
 #
-# hblock REPLACES /etc/hosts wholesale (it does not merge with whatever is
-# already there), so curfew backs it up first and restores it automatically
-# when the curfew ends via its own reboot-safe systemd timer — the same
-# pattern nosudo itself uses to restore sudo (see scheduler.py). Only one
-# curfew hosts-block can be active at a time, since /etc/hosts is a single
-# system-wide file.
+# hblock's blocklist is written to the TOP of /etc/hosts, with your existing
+# /etc/hosts content preserved verbatim below it (via hblock's -F/--footer,
+# which includes the file as-is with no parsing). Since /etc/hosts resolution
+# honors the first matching entry for a given name, the blocklist wins for
+# any domain you'd already mapped yourself, while everything else you had
+# stays intact for the curfew's duration. curfew backs up the original
+# /etc/hosts first and restores it automatically when the curfew ends via its
+# own reboot-safe systemd timer — the same pattern nosudo itself uses to
+# restore sudo (see scheduler.py). Only one curfew hosts-block can be active
+# at a time, since /etc/hosts is a single system-wide file.
 #
 # Profiles live in $CURFEW_PROFILES_DIR (default: ~/.config/curfew/profiles/<name>/)
 # and are plain hblock input files:
@@ -111,6 +115,11 @@ cmd_apply() {
   echo "curfew: backing up /etc/hosts to $HOSTS_BACKUP..."
   sudo mkdir -p "$STATE_DIR"
   sudo cp -p /etc/hosts "$HOSTS_BACKUP"
+
+  # -F (footer) appends the pre-curfew /etc/hosts verbatim, below the
+  # blocklist, so it's preserved while the blocklist still wins on conflicts
+  # (see the file-header comment for why).
+  hblock_args+=(-O /etc/hosts -H none -F "$HOSTS_BACKUP")
 
   echo "curfew: applying profile '$profile' via hblock..."
   if ! sudo hblock "${hblock_args[@]}"; then
