@@ -10,19 +10,15 @@ import argparse
 import getpass
 import os
 import sys
-from datetime import datetime
 
-from . import audit, config, notify, scheduler, sessions, state, sudoers
+from . import api, config
+from .api import CommandError
 from .runner import Runner
 from .sudoers import SudoersError
 from .timeparse import TimeParseError, format_remaining, resolve_lift_time
 
 # Commands that mutate privileged state and therefore need root.
 ROOT_COMMANDS = {"restrict", "extend", "restore"}
-
-
-class CommandError(Exception):
-    """User-facing error; printed without a traceback, exit code 1."""
 
 
 def resolve_user(arg: str | None) -> str:
@@ -53,43 +49,7 @@ def reexec_with_sudo(raw_argv: list[str]) -> None:
 def cmd_restrict(args: argparse.Namespace, runner: Runner) -> None:
     user = resolve_user(args.user)
     lift_at = resolve_lift_time(for_=args.for_, until=args.until)
-
-    if state.exists(user) or sudoers.is_active(user) or scheduler.is_active(user):
-        raise CommandError(
-            f"{user} is already restricted; use `nosudo extend` to change the lift time"
-        )
-
-    # Warn-and-proceed: surface open root leaks without blocking (specs.md §6).
-    opens = audit.open_findings(audit.check(user))
-    if opens:
-        runner.warn(
-            f"{user} has open paths to root that could undo this restriction:"
-        )
-        for f in opens:
-            runner.warn(f"  - {f.vector}: {f.detail}")
-        runner.warn("proceeding anyway; run `nosudo check` for the full audit")
-
-    created: list[str] = []
-    try:
-        sudoers.install(user, lift_at, runner)
-        created.append("sudoers")
-        sessions.warn_existing_sessions(user, runner)
-        record = state.build(user, datetime.now().astimezone(), lift_at)
-        state.write(record, runner)
-        created.append("state")
-        scheduler.install(user, lift_at, runner)
-        created.append("scheduler")
-    except Exception:
-        runner.warn("restrict failed; rolling back partial changes")
-        if "scheduler" in created:
-            scheduler.remove(user, runner)
-        if "state" in created:
-            state.remove(user, runner)
-        if "sudoers" in created:
-            sudoers.remove(user, runner)
-        raise
-
-    notify.start(user, lift_at, runner)
+    api.restrict(user, lift_at, runner)
     runner.info(
         f"{user}: sudo restricted until {lift_at.strftime('%Y-%m-%d %H:%M')} "
         f"({format_remaining(lift_at)} from now)"
@@ -98,19 +58,8 @@ def cmd_restrict(args: argparse.Namespace, runner: Runner) -> None:
 
 def cmd_extend(args: argparse.Namespace, runner: Runner) -> None:
     user = resolve_user(args.user)
-    record = state.read(user)
-    if record is None:
-        raise CommandError(f"{user} is not currently restricted")
-
     new_lift = resolve_lift_time(for_=args.for_, until=args.until)
-    if new_lift <= record.lift_dt:
-        raise CommandError(
-            "extend is lengthen-only: the new lift time must be later than the "
-            f"current one ({record.lift_dt.strftime('%Y-%m-%d %H:%M')})"
-        )
-
-    scheduler.update_timer(user, new_lift, runner)
-    state.update_lift_time(record, new_lift, runner)
+    api.extend(user, new_lift, runner)
     runner.info(
         f"{user}: lift time extended to {new_lift.strftime('%Y-%m-%d %H:%M')} "
         f"({format_remaining(new_lift)} from now)"
@@ -119,16 +68,12 @@ def cmd_extend(args: argparse.Namespace, runner: Runner) -> None:
 
 def cmd_restore(args: argparse.Namespace, runner: Runner) -> None:
     user = resolve_user(args.user)
-    # Idempotent: every step tolerates already-removed state.
-    scheduler.remove(user, runner)
-    sudoers.remove(user, runner)
-    state.remove(user, runner)
-    notify.end(user, runner)
+    api.restore(user, runner)
     runner.info(f"{user}: sudo rights restored")
 
 
 def cmd_status(args: argparse.Namespace, runner: Runner) -> None:
-    records = state.list_all()
+    records = api.status()
     if not records:
         runner.info("No active restrictions.")
         return
@@ -142,7 +87,7 @@ def cmd_status(args: argparse.Namespace, runner: Runner) -> None:
 
 def cmd_check(args: argparse.Namespace, runner: Runner) -> None:
     user = resolve_user(args.user)
-    findings = audit.check(user)
+    findings = api.check(user)
     width = max(len(f.vector) for f in findings)
     runner.info(f"Root-access audit for {user}:")
     for f in findings:
