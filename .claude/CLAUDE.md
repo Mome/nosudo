@@ -9,3 +9,9 @@ bare `pip`, `python -m venv`, `pipx`, or `python` directly.
 - Manage deps: `uv add <pkg>` / `uv remove <pkg>`; sync env with `uv sync`.
 - Lockfile `uv.lock` is committed.
 - Project metadata lives in `pyproject.toml` (managed by uv).
+
+## Skills
+
+Before starting any task, check whether it makes sense to use the `superpowers` skills
+(e.g. brainstorming, systematic-debugging, test-driven-development) instead of proceeding
+ad hoc.
