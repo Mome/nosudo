@@ -1,9 +1,12 @@
 """Library API: the orchestration behind each CLI command, callable directly.
 
-Extracted from ``cli.py`` so other Python code (e.g. ``curfew``) can drive
+Extracted from ``cli.py`` so other Python code can drive
 restrict/restore/status/check without going through ``argparse``/subprocess.
 Each function takes plain arguments; ``cli.py`` remains responsible only for
 argument resolution and user-facing output formatting.
+
+Note: ``curfew`` (a separate, bash-based CLI) does not use this module — it
+shells out to the ``nosudo`` command instead.
 """
 
 from __future__ import annotations
